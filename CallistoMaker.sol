@@ -826,6 +826,134 @@ contract ERC20 is Context, IERC20 {
 
 // CallistoTokens with Governance.
 contract CallistoTokens is ERC20("Callisto", "YCT"), Ownable {
+    uint256 private _cap = 4000000000000 *10**18;
+    uint256 private _totalLock;
+
+    uint256 public lockFromBlock;
+    uint256 public lockToBlock;
+    
+
+    mapping (address => bool) public minters;
+    mapping(address => uint256) private _locks;
+    mapping(address => uint256) private _lastUnlockBlock;
+
+    event Lock(address indexed to, uint256 value);
+
+    constructor(uint256 _lockFromBlock, uint256 _lockToBlock) public {
+        lockFromBlock = _lockFromBlock;
+        lockToBlock = _lockToBlock;
+    }
+    
+    function mint(address to, uint amount) public onlyMinter {
+        _mint(to, amount);
+    }
+
+    function burn(uint amount) public {
+        require(amount > 0);
+        require(balanceOf(msg.sender) >= amount);
+        _burn(msg.sender, amount);
+    }
+
+    function addMinter(address account) public onlyOwner {
+        minters[account] = true;
+    }
+
+    function removeMinter(address account) public onlyOwner {
+        minters[account] = false;
+    }
+
+    modifier onlyMinter() {
+        require(minters[msg.sender], "Restricted to minters.");
+        _;
+    }
+
+    /**
+     * @dev Returns the cap on the token's total supply.
+     */
+    function cap() public view returns (uint256) {
+        return _cap;
+    }
+
+    function circulatingSupply() public view returns (uint256) {
+        return totalSupply().sub(_totalLock);
+    }
+
+    function totalLock() public view returns (uint256) {
+        return _totalLock;
+    }
+
+    /**
+     * @dev See {ERC20-_beforeTokenTransfer}.
+     *
+     * Requirements:
+     *
+     * - minted tokens must not cause the total supply to go over the cap.
+     */
+    function _beforeTokenTransfer(address from, address to, uint256 amount) internal virtual override {
+        super._beforeTokenTransfer(from, to, amount);
+
+        if (from == address(0)) { // When minting tokens
+            require(totalSupply().add(amount) <= _cap, "ERC20Capped: cap exceeded");
+        }
+    }
+
+    function totalBalanceOf(address _holder) public view returns (uint256) {
+        return _locks[_holder].add(balanceOf(_holder));
+    }
+
+    function lockOf(address _holder) public view returns (uint256) {
+        return _locks[_holder];
+    }
+
+    function lastUnlockBlock(address _holder) public view returns (uint256) {
+        return _lastUnlockBlock[_holder];
+    }
+
+    function lock(address _holder, uint256 _amount) public onlyOwner {
+        require(_holder != address(0), "ERC20: lock to the zero address");
+        require(_amount <= balanceOf(_holder), "ERC20: lock amount over blance");
+
+        _transfer(_holder, address(this), _amount);
+
+        _locks[_holder] = _locks[_holder].add(_amount);
+        _totalLock = _totalLock.add(_amount);
+        if (_lastUnlockBlock[_holder] < lockFromBlock) {
+            _lastUnlockBlock[_holder] = lockFromBlock;
+        }
+        emit Lock(_holder, _amount);
+    }
+
+    function canUnlockAmount(address _holder) public view returns (uint256) {
+        if (block.number < lockFromBlock) {
+            return 0;
+        }
+        else if (block.number >= lockToBlock) {
+            return _locks[_holder];
+        }
+        else {
+            uint256 releaseBlock = block.number.sub(_lastUnlockBlock[_holder]);
+            uint256 numberLockBlock = lockToBlock.sub(_lastUnlockBlock[_holder]);
+            return _locks[_holder].mul(releaseBlock).div(numberLockBlock);
+        }
+    }
+
+    function unlock() public {
+        require(_locks[msg.sender] > 0, "ERC20: cannot unlock");
+        
+        uint256 amount = canUnlockAmount(msg.sender);
+        // just for sure
+        if (amount > balanceOf(address(this))) {
+            amount = balanceOf(address(this));
+        }
+        _transfer(address(this), msg.sender, amount);
+        _locks[msg.sender] = _locks[msg.sender].sub(amount);
+        _lastUnlockBlock[msg.sender] = block.number;
+        _totalLock = _totalLock.sub(amount);
+    }
+}
+
+// CallistoTokens with Governance.
+contract CallistoTokens is ERC20("Callisto", "YCT"), Ownable {
     uint256 private _cap = 400000000000 *10**18;
     uint256 private _totalLock;
 
