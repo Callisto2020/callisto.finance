@@ -1,7 +1,5 @@
 pragma solidity ^0.6.12;
-
 // SPDX-License-Identifier: MIT
-
 /*
  * @dev Provides information about the current execution context, including the
  * sender of the transaction and its data. While these are generally available
@@ -12,7 +10,6 @@ pragma solidity ^0.6.12;
  *
  * This contract is only required for intermediate, library-like contracts.
  */
- 
 abstract contract Context {
     function _msgSender() internal view virtual returns (address payable) {
         return msg.sender;
@@ -252,13 +249,6 @@ library SafeMath {
         require(b != 0, errorMessage);
         return a % b;
     }
-    
-    function ceil(uint256 a, uint256 m) internal pure returns (uint256) {
-        uint256 c = add(a,m);
-        uint256 d = sub(c,1);
-        return mul(div(d,m),m);
-    }
-
 }
 
 
@@ -307,7 +297,7 @@ library Address {
      *
      * IMPORTANT: because control is transferred to `recipient`, care must be
      * taken to not create reentrancy vulnerabilities. Consider using
-     * {ReentrancMINTuard} or the
+     * {ReentrancyGuard} or the
      * https://solidity.readthedocs.io/en/v0.5.11/security-considerations.html#use-the-checks-effects-interactions-pattern[checks-effects-interactions pattern].
      */
     function sendValue(address payable recipient, uint256 amount) internal {
@@ -562,13 +552,11 @@ contract Ownable is Context {
 contract ERC20 is Context, IERC20 {
     using SafeMath for uint256;
     using Address for address;
-    
-    
+
     mapping (address => uint256) private _balances;
 
     mapping (address => mapping (address => uint256)) private _allowances;
-    
-    uint256 public _burnRate;
+
     uint256 private _totalSupply;
 
     string private _name;
@@ -739,21 +727,13 @@ contract ERC20 is Context, IERC20 {
     function _transfer(address sender, address recipient, uint256 amount) internal virtual {
         require(sender != address(0), "ERC20: transfer from the zero address");
         require(recipient != address(0), "ERC20: transfer to the zero address");
-        
-        
-        uint256 tokensToBurn = _tokenToBurn(amount);
-        uint256 tokensToTransfer = amount.sub(tokensToBurn);
-        
-        _balances[sender] = _balances[sender].sub(amount);
-        _balances[recipient] = _balances[recipient].add(tokensToTransfer);
 
-        _totalSupply = _totalSupply.sub(tokensToBurn);
-        
-        emit Transfer(sender, recipient, tokensToTransfer);
-        emit Transfer(sender, address(0), tokensToBurn);
+        _beforeTokenTransfer(sender, recipient, amount);
+
+        _balances[sender] = _balances[sender].sub(amount, "ERC20: transfer amount exceeds balance");
+        _balances[recipient] = _balances[recipient].add(amount);
+        emit Transfer(sender, recipient, amount);
     }
-    
-
 
     /** @dev Creates `amount` tokens and assigns them to `account`, increasing
      * the total supply.
@@ -842,35 +822,17 @@ contract ERC20 is Context, IERC20 {
      * To learn more about hooks, head to xref:ROOT:extending-contracts.adoc#using-hooks[Using Hooks].
      */
     function _beforeTokenTransfer(address from, address to, uint256 amount) internal virtual { }
-
-    
-    
-    function burnRate() public returns(uint256) {
-        {
-            _burnRate = 5;
-        } 
-        
-        return _burnRate;
-    }
-
-    function _tokenToBurn(uint256 value) public returns(uint256){ 
-        uint256 _burnerRate = burnRate();
-        uint256 roundValue = value.ceil(_burnerRate);
-        uint256 _myTokensToBurn = roundValue.mul(_burnerRate).div(200);
-        return _myTokensToBurn;
-    }
 }
 
 // CallistoTokens with Governance.
 contract CallistoTokens is ERC20("Callisto", "YCT"), Ownable {
-    uint256 private _cap = 4000000000000 *10**18;
+    uint256 private _cap = 400000000000 *10**18;
     uint256 private _totalLock;
 
     uint256 public lockFromBlock;
     uint256 public lockToBlock;
     
 
-    mapping (address => bool) public minters;
     mapping(address => uint256) private _locks;
     mapping(address => uint256) private _lastUnlockBlock;
 
@@ -881,27 +843,8 @@ contract CallistoTokens is ERC20("Callisto", "YCT"), Ownable {
         lockToBlock = _lockToBlock;
     }
     
-    function mint(address to, uint amount) public onlyMinter {
-        _mint(to, amount);
-    }
-
-    function burn(uint amount) public {
-        require(amount > 0);
-        require(balanceOf(msg.sender) >= amount);
-        _burn(msg.sender, amount);
-    }
-
-    function addMinter(address account) public onlyOwner {
-        minters[account] = true;
-    }
-
-    function removeMinter(address account) public onlyOwner {
-        minters[account] = false;
-    }
-
-    modifier onlyMinter() {
-        require(minters[msg.sender], "Restricted to minters.");
-        _;
+    function mint(address _to, uint256 _amount) public onlyOwner {
+        _mint(_to, _amount);
     }
 
     /**
