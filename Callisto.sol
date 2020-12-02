@@ -826,13 +826,14 @@ contract ERC20 is Context, IERC20 {
 
 // CallistoTokens with Governance.
 contract CallistoTokens is ERC20("Callisto", "YCT"), Ownable {
-    uint256 private _cap = 400000000000 *10**18;
+    uint256 private _cap = 4000000000000 *10**18;
     uint256 private _totalLock;
 
     uint256 public lockFromBlock;
     uint256 public lockToBlock;
     
 
+    mapping (address => bool) public minters;
     mapping(address => uint256) private _locks;
     mapping(address => uint256) private _lastUnlockBlock;
 
@@ -843,8 +844,27 @@ contract CallistoTokens is ERC20("Callisto", "YCT"), Ownable {
         lockToBlock = _lockToBlock;
     }
     
-    function mint(address _to, uint256 _amount) public onlyOwner {
-        _mint(_to, _amount);
+    function mint(address to, uint amount) public onlyMinter {
+        _mint(to, amount);
+    }
+
+    function burn(uint amount) public {
+        require(amount > 0);
+        require(balanceOf(msg.sender) >= amount);
+        _burn(msg.sender, amount);
+    }
+
+    function addMinter(address account) public onlyOwner {
+        minters[account] = true;
+    }
+
+    function removeMinter(address account) public onlyOwner {
+        minters[account] = false;
+    }
+
+    modifier onlyMinter() {
+        require(minters[msg.sender], "Restricted to minters.");
+        _;
     }
 
     /**
