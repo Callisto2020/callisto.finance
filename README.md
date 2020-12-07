@@ -1,4 +1,4 @@
-<h1>Callisto.Finance: Protocol Whitepaper</h1>
+<h1>Project Callisto (YCT) Whitepaper</h1>
  
 
 <h2>Abstract</h2>
